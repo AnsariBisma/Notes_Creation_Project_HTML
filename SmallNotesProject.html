@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>JSON Data Store (No Backend)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --border:#e5e7eb; --muted:#6b7280; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; max-width: 980px; }
+    h1 { margin: 0 0 0.5rem 0; }
+    .muted { color: var(--muted); font-size: .95rem; }
+    form, .card { border: 1px solid var(--border); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; background: #fff; }
+    label { display:block; margin:.5rem 0 .25rem; font-weight:600; }
+    input, textarea, select, button { padding:.6rem .7rem; font-size:1rem; border:1px solid var(--border); border-radius:10px; }
+    input, textarea, select { width:100%; }
+    button { cursor:pointer; border-color:#d1d5db; background:#f9fafb; }
+    button:hover { background:#f3f4f6; }
+    .row { display:flex; gap: .75rem; flex-wrap: wrap; align-items:flex-start }
+    .col { flex:1 1 260px; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding:.6rem; border-bottom:1px solid #f0f0f0; text-align:left; vertical-align: top; }
+    th { background:#fafafa; position: sticky; top: 0; }
+    .actions { display:flex; gap:.5rem; flex-wrap: wrap; }
+    .pill { background:#f4f4f4; padding:.25rem .5rem; border-radius: 999px; font-size:.85rem; }
+    .toolbar { display:flex; gap:.5rem; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+    .right { display:flex; gap:.5rem; align-items:center; }
+    .danger { background:#fff1f2; border-color:#fecdd3; }
+    .danger:hover { background:#ffe4e6; }
+    #table-wrap { margin-top:1rem; max-height: 50vh; overflow:auto; border:1px solid var(--border); border-radius: 10px; }
+    .nowrap { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <h1>JSON Data Store (No Backend)</h1>
+  <p class="muted">Data is saved locally in your browser using <strong>IndexedDB</strong>. You can export as JSON or CSV anytime. Host this page on GitHub Pages.</p>
+
+  <form id="data-form">
+    <h2>Add a record</h2>
+    <div class="row">
+      <div class="col">
+        <label for="title">Title <span class="muted" style="font-weight:400">(required)</span></label>
+        <input id="title" name="title" type="text" required />
+      </div>
+      <div class="col">
+        <label for="category">Category</label>
+        <input id="category" name="category" type="text" />
+      </div>
+    </div>
+    <label for="details">Details (JSON or plain text)</label>
+    <textarea id="details" name="details" rows="5" placeholder='{"notes":"anything"} OR plain text'></textarea>
+    <div class="actions" style="margin-top:.5rem">
+      <button type="submit">Save</button>
+      <button type="button" id="reset-btn">Reset form</button>
+    </div>
+    <p class="muted">Tip: If you paste valid JSON into Details, it will be stored as an object; otherwise it is stored as text.</p>
+  </form>
+
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0">Records</h2>
+      <div class="right">
+        <input id="search" placeholder="Search title/category" />
+        <button id="refresh-btn" type="button">Refresh</button>
+        <button id="download-json-btn" type="button">Download JSON</button>
+        <button id="download-csv-btn" type="button">Download CSV</button>
+        <button id="import-json-btn" type="button">Import JSON</button>
+        <button id="clear-btn" class="danger" type="button" title="Deletes everything!">Clear Database</button>
+        <span id="count" class="pill">0 records</span>
+      </div>
+    </div>
+
+    <div id="table-wrap">
+      <table id="records-table">
+        <thead>
+          <tr>
+            <th class="nowrap">ID</th>
+            <th>Title</th>
+            <th>Category</th>
+            <th>Details</th>
+            <th class="nowrap">Created At</th>
+            <th class="nowrap">Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const DB_NAME = "my_json_db";
+  const STORE = "records";
+  const DB_VERSION = 1;
+
+  let db;
+  let cache = [];
+
+  function openDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE)) {
+          const store = db.createObjectStore(STORE, { keyPath: "id", autoIncrement: true });
+          store.createIndex("createdAt", "createdAt");
+          store.createIndex("title", "title", { unique: false });
+          store.createIndex("category", "category", { unique: false });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function tx(storeName, mode = "readonly") {
+    const t = db.transaction(storeName, mode);
+    return { store: t.objectStore(storeName), transaction: t };
+  }
+
+  async function addRecord(record) {
+    return new Promise((resolve, reject) => {
+      const { store } = tx(STORE, "readwrite");
+      const req = store.add(record);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function updateRecord(id, patch) {
+    return new Promise((resolve, reject) => {
+      const { store } = tx(STORE, "readwrite");
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const obj = Object.assign({}, getReq.result, patch);
+        const putReq = store.put(obj);
+        putReq.onsuccess = () => resolve();
+        putReq.onerror = () => reject(putReq.error);
+      };
+      getReq.onerror = () => reject(getReq.error);
+    });
+  }
+
+  async function deleteRecord(id) {
+    return new Promise((resolve, reject) => {
+      const { store } = tx(STORE, "readwrite");
+      const req = store.delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function getAllRecords() {
+    return new Promise((resolve, reject) => {
+      const { store } = tx(STORE, "readonly");
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function clearAll() {
+    return new Promise((resolve, reject) => {
+      const { store } = tx(STORE, "readwrite");
+      const req = store.clear();
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function download(filename, content, type = "application/json") {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function toCSV(rows) {
+    if (!rows.length) return "";
+    const header = ["id","title","category","details","createdAt"];
+    const escape = (v) => {
+      const s = (v ?? "").toString();
+      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+    const body = rows.map(r => {
+      const details = (typeof r.details === "object") ? JSON.stringify(r.details) : (r.details ?? "");
+      return [r.id, r.title ?? "", r.category ?? "", details, r.createdAt ?? ""].map(escape).join(",");
+    });
+    return [header.join(","), ...body].join("\n");
+  }
+
+  function tryParseJSON(text) {
+    try { const obj = JSON.parse(text); if (obj && typeof obj === "object") return obj; } catch {}
+    return text; // keep as plain text
+  }
+
+  function renderTable(rows) {
+    const tbody = document.querySelector("#records-table tbody");
+    tbody.innerHTML = "";
+    for (const r of rows.sort((a,b)=> (a.id||0) - (b.id||0))) {
+      const tr = document.createElement("tr");
+      const details = typeof r.details === "object" ? JSON.stringify(r.details) : (r.details ?? "");
+      tr.innerHTML = `
+        <td class="nowrap">${r.id ?? ""}</td>
+        <td>${r.title ?? ""}</td>
+        <td>${r.category ?? ""}</td>
+        <td style="max-width:440px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${details.replaceAll('"','&quot;')}">${details}</td>
+        <td class="nowrap">${r.createdAt ?? ""}</td>
+        <td class="nowrap">
+          <button data-edit="${r.id}">Edit</button>
+          <button data-del="${r.id}" class="danger">Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    }
+    document.getElementById("count").textContent = `${rows.length} record${rows.length===1?"":"s"}`;
+  }
+
+  function applySearchFilter() {
+    const q = document.getElementById('search').value.toLowerCase().trim();
+    if (!q) return cache;
+    return cache.filter(r => (r.title||'').toLowerCase().includes(q) || (r.category||'').toLowerCase().includes(q));
+  }
+
+  async function refresh() {
+    cache = await getAllRecords();
+    renderTable(applySearchFilter());
+    return cache;
+  }
+
+  // Init
+  (async () => { db = await openDB(); await refresh(); })();
+
+  // Form handlers
+  document.getElementById("data-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const title = document.getElementById("title").value.trim();
+    const category = document.getElementById("category").value.trim();
+    const detailsRaw = document.getElementById("details").value.trim();
+    if (!title) { alert("Title is required"); return; }
+    const record = { title, category, details: detailsRaw ? tryParseJSON(detailsRaw) : "", createdAt: new Date().toISOString() };
+    await addRecord(record);
+    e.target.reset();
+    await refresh();
+  });
+  document.getElementById("reset-btn").addEventListener("click", () => document.getElementById("data-form").reset());
+  document.getElementById("refresh-btn").addEventListener("click", refresh);
+  document.getElementById("search").addEventListener("input", () => renderTable(applySearchFilter()));
+
+  // Row actions (edit/delete)
+  document.querySelector("#records-table").addEventListener("click", async (e) => {
+    const del = e.target.getAttribute("data-del");
+    const edit = e.target.getAttribute("data-edit");
+    if (del) {
+      if (!confirm("Delete this record?")) return;
+      await deleteRecord(Number(del));
+      await refresh();
+    }
+    if (edit) {
+      const id = Number(edit);
+      const row = cache.find(r => r.id === id);
+      if (!row) return;
+      const newTitle = prompt("Edit title", row.title ?? "");
+      if (newTitle === null) return; // canceled
+      const newCategory = prompt("Edit category", row.category ?? "");
+      if (newCategory === null) return;
+      const newDetails = prompt("Edit details (JSON or text)", typeof row.details === 'object' ? JSON.stringify(row.details, null, 2) : (row.details ?? ""));
+      if (newDetails === null) return;
+      await updateRecord(id, { title: newTitle.trim(), category: newCategory.trim(), details: newDetails.trim() ? tryParseJSON(newDetails) : "" });
+      await refresh();
+    }
+  });
+
+  // Export
+  document.getElementById("download-json-btn").addEventListener("click", async () => {
+    const rows = await refresh();
+    download("data.json", JSON.stringify(rows, null, 2), "application/json");
+  });
+  document.getElementById("download-csv-btn").addEventListener("click", async () => {
+    const rows = await refresh();
+    download("data.csv", toCSV(rows), "text/csv");
+  });
+
+  // Import JSON (expects an array of objects with fields similar to what we export)
+  document.getElementById("import-json-btn").addEventListener("click", async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+      const text = await file.text();
+      try {
+        const arr = JSON.parse(text);
+        if (!Array.isArray(arr)) throw new Error('JSON must be an array of records');
+        for (const r of arr) {
+          const rec = {
+            title: r.title ?? '',
+            category: r.category ?? '',
+            details: (typeof r.details === 'object' || typeof r.details === 'string') ? r.details : '',
+            createdAt: r.createdAt ?? new Date().toISOString()
+          };
+          await addRecord(rec);
+        }
+        await refresh();
+        alert('Import complete');
+      } catch (err) {
+        alert('Import failed: ' + err.message);
+      }
+    };
+    input.click();
+  });
+
+  // Danger zone
+  document.getElementById("clear-btn").addEventListener("click", async () => {
+    if (!confirm("This will delete ALL data. Continue?")) return;
+    await clearAll();
+    await refresh();
+  });
+})();
+</script>
+</body>
+</html>
+
