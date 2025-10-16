@@ -1,90 +1,198 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8" />
-  <title>JSON Data Store (No Backend)</title>
+  <title>Small Notes — JSON Data Store</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --border:#e5e7eb; --muted:#6b7280; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 2rem; max-width: 980px; }
-    h1 { margin: 0 0 0.5rem 0; }
-    .muted { color: var(--muted); font-size: .95rem; }
-    form, .card { border: 1px solid var(--border); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; background: #fff; }
-    label { display:block; margin:.5rem 0 .25rem; font-weight:600; }
-    input, textarea, select, button { padding:.6rem .7rem; font-size:1rem; border:1px solid var(--border); border-radius:10px; }
-    input, textarea, select { width:100%; }
-    button { cursor:pointer; border-color:#d1d5db; background:#f9fafb; }
-    button:hover { background:#f3f4f6; }
-    .row { display:flex; gap: .75rem; flex-wrap: wrap; align-items:flex-start }
-    .col { flex:1 1 260px; }
-    table { width:100%; border-collapse: collapse; }
-    th, td { padding:.6rem; border-bottom:1px solid #f0f0f0; text-align:left; vertical-align: top; }
-    th { background:#fafafa; position: sticky; top: 0; }
-    .actions { display:flex; gap:.5rem; flex-wrap: wrap; }
-    .pill { background:#f4f4f4; padding:.25rem .5rem; border-radius: 999px; font-size:.85rem; }
-    .toolbar { display:flex; gap:.5rem; align-items:center; justify-content:space-between; flex-wrap:wrap; }
-    .right { display:flex; gap:.5rem; align-items:center; }
-    .danger { background:#fff1f2; border-color:#fecdd3; }
-    .danger:hover { background:#ffe4e6; }
-    #table-wrap { margin-top:1rem; max-height: 50vh; overflow:auto; border:1px solid var(--border); border-radius: 10px; }
+    /* ===== Design tokens ===== */
+    :root {
+      --bg: #0b1020;
+      --bg-soft: #0f162e;
+      --card: #121a36;
+      --text: #e5e7eb;
+      --muted: #a3acc3;
+      --border: #202a4a;
+      --brand: #6aa6ff;
+      --brand-2: #9b7bff;
+      --accent: #24d1a5;
+      --danger: #ff6b81;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 16px;
+    }
+    [data-theme="light"] {
+      --bg: #f6f7fb;
+      --bg-soft: #eef1f7;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #5b6478;
+      --border: #e6eaf2;
+      --brand: #2563eb;
+      --brand-2: #7c3aed;
+      --accent: #059669;
+      --danger: #dc2626;
+      --shadow: 0 10px 25px rgba(2,6,23,.08);
+    }
+
+    /* ===== Global ===== */
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 500px at 10% -10%, rgba(124,58,237,.15), transparent 45%),
+                  radial-gradient(800px 500px at 110% 10%, rgba(37,99,235,.12), transparent 40%), var(--bg);
+      color: var(--text);
+      display: grid; grid-template-rows: auto 1fr auto;
+    }
+    a { color: var(--brand); text-decoration: none; }
+
+    /* ===== Header / Nav ===== */
+    .nav {
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: saturate(120%) blur(8px);
+      background: linear-gradient(90deg, rgba(124,58,237,.15), rgba(37,99,235,.15))
+                  ,color-mix(in srgb, var(--bg), transparent 10%);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-wrap { max-width: 1100px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; gap: 14px; }
+    .logo {
+      width: 36px; height: 36px; border-radius: 10px; display:grid; place-items:center; font-weight:700; color:white;
+      background: linear-gradient(135deg, var(--brand), var(--brand-2));
+      box-shadow: var(--shadow);
+    }
+    .title { font-weight: 700; letter-spacing: 0.2px; }
+    .spacer { flex: 1; }
+    .toggle { border: 1px solid var(--border); background: var(--card); color: var(--text); padding: 8px 12px; border-radius: 999px; cursor: pointer; }
+    .toggle:hover { filter: brightness(1.05); }
+
+    /* ===== Layout ===== */
+    .container { max-width: 1100px; margin: 28px auto; padding: 0 20px; }
+    .hero { display:grid; gap: 6px; margin-bottom: 18px; }
+    .hero h1 { margin: 0; font-size: clamp(26px, 3.5vw, 36px); }
+    .muted { color: var(--muted); }
+
+    /* ===== Cards / Forms ===== */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .pad { padding: 20px; }
+    form .row { display:flex; gap: 14px; flex-wrap: wrap; }
+    .col { flex: 1 1 260px; }
+    label { display:block; margin: .35rem 0 .25rem; font-weight: 600; }
+    input, textarea, select { width: 100%; background: color-mix(in srgb, var(--card), white 2%);
+      border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; color: var(--text);
+      outline: none; box-shadow: inset 0 1px 0 rgba(0,0,0,.02);
+    }
+    input:focus, textarea:focus { border-color: color-mix(in srgb, var(--brand), var(--border) 40%);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand), transparent 85%);
+    }
+    textarea { resize: vertical; min-height: 120px; }
+
+    .actions { display:flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .btn { border: 1px solid var(--border); background: var(--bg-soft); color: var(--text); padding: 10px 14px; border-radius: 12px; cursor: pointer; font-weight: 600; }
+    .btn:hover { filter: brightness(1.05); }
+    .btn.primary { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff; border: none; box-shadow: var(--shadow); }
+    .btn.ghost { background: transparent; }
+    .btn.danger { background: color-mix(in srgb, var(--danger), transparent 88%); border-color: color-mix(in srgb, var(--danger), var(--border) 60%); }
+
+    /* Toolbar */
+    .toolbar { display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap: wrap; padding: 16px 20px; border-bottom:1px solid var(--border); }
+    .right { display:flex; gap:10px; align-items:center; flex-wrap: wrap; }
+    #search { width: 260px; }
+    .pill { background: color-mix(in srgb, var(--brand), transparent 88%); border:1px solid color-mix(in srgb, var(--brand), var(--border) 65%);
+      color: var(--text); padding: 6px 10px; border-radius: 999px; font-size:.9rem; }
+
+    /* Table */
+    #table-wrap { margin: 14px 20px 20px; max-height: 52vh; overflow: auto; border: 1px solid var(--border); border-radius: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: .98rem; }
+    thead th { position: sticky; top: 0; background: color-mix(in srgb, var(--card), var(--bg-soft) 35%); border-bottom:1px solid var(--border); text-align: left; padding: 12px; }
+    tbody td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tbody tr:hover { background: color-mix(in srgb, var(--bg-soft), transparent 70%); }
     .nowrap { white-space: nowrap; }
+
+    /* Footer */
+    footer { padding: 24px 20px; text-align: center; color: var(--muted); border-top: 1px solid var(--border); background: color-mix(in srgb, var(--bg), var(--bg-soft) 25%); }
+
+    /* Small helpers */
+    .maxw { max-width: 980px; margin: 0 auto; }
   </style>
 </head>
 <body>
-  <h1>JSON Data Store (No Backend)</h1>
-  <p class="muted">Data is saved locally in your browser using <strong>IndexedDB</strong>. You can export as JSON or CSV anytime. Host this page on GitHub Pages.</p>
+  <!-- Nav / Brand -->
+  <header class="nav">
+    <div class="nav-wrap">
+      <div class="logo">SN</div>
+      <div class="title">Small Notes</div>
+      <div class="spacer"></div>
+      <button id="theme-toggle" class="toggle" title="Toggle theme">Toggle theme</button>
+    </div>
+  </header>
 
-  <form id="data-form">
-    <h2>Add a record</h2>
-    <div class="row">
-      <div class="col">
-        <label for="title">Title <span class="muted" style="font-weight:400">(required)</span></label>
-        <input id="title" name="title" type="text" required />
-      </div>
-      <div class="col">
-        <label for="category">Category</label>
-        <input id="category" name="category" type="text" />
-      </div>
-    </div>
-    <label for="details">Details (JSON or plain text)</label>
-    <textarea id="details" name="details" rows="5" placeholder='{"notes":"anything"} OR plain text'></textarea>
-    <div class="actions" style="margin-top:.5rem">
-      <button type="submit">Save</button>
-      <button type="button" id="reset-btn">Reset form</button>
-    </div>
-    <p class="muted">Tip: If you paste valid JSON into Details, it will be stored as an object; otherwise it is stored as text.</p>
-  </form>
+  <main class="container maxw">
+    <section class="hero">
+      <h1>JSON Notes (No Backend)</h1>
+      <p class="muted">Store notes locally in your browser using <strong>IndexedDB</strong>. Export anytime as JSON/CSV. Perfect for GitHub Pages.</p>
+    </section>
 
-  <div class="card">
-    <div class="toolbar">
-      <h2 style="margin:0">Records</h2>
-      <div class="right">
-        <input id="search" placeholder="Search title/category" />
-        <button id="refresh-btn" type="button">Refresh</button>
-        <button id="download-json-btn" type="button">Download JSON</button>
-        <button id="download-csv-btn" type="button">Download CSV</button>
-        <button id="import-json-btn" type="button">Import JSON</button>
-        <button id="clear-btn" class="danger" type="button" title="Deletes everything!">Clear Database</button>
-        <span id="count" class="pill">0 records</span>
-      </div>
-    </div>
+    <!-- Form Card -->
+    <section class="card pad">
+      <form id="data-form">
+        <h2 style="margin-top:0">Add a record</h2>
+        <div class="row">
+          <div class="col">
+            <label for="title">Title <span class="muted" style="font-weight:400">(required)</span></label>
+            <input id="title" name="title" type="text" placeholder="e.g., Meeting notes" required />
+          </div>
+          <div class="col">
+            <label for="category">Category</label>
+            <input id="category" name="category" type="text" placeholder="e.g., Work" />
+          </div>
+        </div>
+        <label for="details">Details (JSON or plain text)</label>
+        <textarea id="details" name="details" rows="6" placeholder='{"notes":"anything"} OR plain text'></textarea>
+        <div class="actions">
+          <button type="submit" class="btn primary">Save</button>
+          <button type="button" id="reset-btn" class="btn ghost">Reset form</button>
+        </div>
+        <p class="muted" style="margin:10px 0 0">Tip: If you paste valid JSON into Details, it will be stored as an object; otherwise it is stored as text.</p>
+      </form>
+    </section>
 
-    <div id="table-wrap">
-      <table id="records-table">
-        <thead>
-          <tr>
-            <th class="nowrap">ID</th>
-            <th>Title</th>
-            <th>Category</th>
-            <th>Details</th>
-            <th class="nowrap">Created At</th>
-            <th class="nowrap">Actions</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
+    <!-- Records Card -->
+    <section class="card">
+      <div class="toolbar">
+        <h2 style="margin:0">Records</h2>
+        <div class="right">
+          <input id="search" placeholder="Search title/category" />
+          <button id="refresh-btn" type="button" class="btn">Refresh</button>
+          <button id="download-json-btn" type="button" class="btn">Download JSON</button>
+          <button id="download-csv-btn" type="button" class="btn">Download CSV</button>
+          <button id="import-json-btn" type="button" class="btn">Import JSON</button>
+          <button id="clear-btn" class="btn danger" type="button" title="Deletes everything!">Clear Database</button>
+          <span id="count" class="pill">0 records</span>
+        </div>
+      </div>
+      <div id="table-wrap">
+        <table id="records-table">
+          <thead>
+            <tr>
+              <th class="nowrap">ID</th>
+              <th>Title</th>
+              <th>Category</th>
+              <th>Details</th>
+              <th class="nowrap">Created At</th>
+              <th class="nowrap">Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Built for GitHub Pages • Stored locally • No backend required
+  </footer>
 
 <script>
 (function () {
@@ -92,8 +200,18 @@
   const STORE = "records";
   const DB_VERSION = 1;
 
-  let db;
-  let cache = [];
+  let db; let cache = [];
+
+  // Theme toggle with localStorage + respect prefers-color-scheme
+  const preferredDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const saved = localStorage.getItem('sn-theme');
+  document.documentElement.setAttribute('data-theme', saved || (preferredDark ? 'dark' : 'light'));
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme');
+    const next = cur === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('sn-theme', next);
+  });
 
   function openDB() {
     return new Promise((resolve, reject) => {
@@ -170,30 +288,14 @@
   function download(filename, content, type = "application/json") {
     const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
+    const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
   }
 
-  function toCSV(rows) {
-    if (!rows.length) return "";
-    const header = ["id","title","category","details","createdAt"];
-    const escape = (v) => {
-      const s = (v ?? "").toString();
-      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-      return s;
-    };
-    const body = rows.map(r => {
-      const details = (typeof r.details === "object") ? JSON.stringify(r.details) : (r.details ?? "");
-      return [r.id, r.title ?? "", r.category ?? "", details, r.createdAt ?? ""].map(escape).join(",");
-    });
-    return [header.join(","), ...body].join("\n");
-  }
+  function toCSV(rows) { if (!rows.length) return ""; const header=["id","title","category","details","createdAt"]; const esc=(v)=>{const s=(v??"").toString(); return /[",
+]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;}; return [header.join(","), ...rows.map(r=>{const d=(typeof r.details==="object")?JSON.stringify(r.details):(r.details??""); return [r.id,r.title??"",r.category??"",d,r.createdAt??""].map(esc).join(",");})].join("
+"); }
 
-  function tryParseJSON(text) {
-    try { const obj = JSON.parse(text); if (obj && typeof obj === "object") return obj; } catch {}
-    return text; // keep as plain text
-  }
+  function tryParseJSON(text){ try{ const obj=JSON.parse(text); if(obj && typeof obj==="object") return obj; }catch{} return text; }
 
   function renderTable(rows) {
     const tbody = document.querySelector("#records-table tbody");
@@ -205,11 +307,11 @@
         <td class="nowrap">${r.id ?? ""}</td>
         <td>${r.title ?? ""}</td>
         <td>${r.category ?? ""}</td>
-        <td style="max-width:440px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${details.replaceAll('"','&quot;')}">${details}</td>
+        <td style="max-width:480px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${details.replaceAll('"','&quot;')}">${details}</td>
         <td class="nowrap">${r.createdAt ?? ""}</td>
         <td class="nowrap">
-          <button data-edit="${r.id}">Edit</button>
-          <button data-del="${r.id}" class="danger">Delete</button>
+          <button data-edit="${r.id}" class="btn">Edit</button>
+          <button data-del="${r.id}" class="btn danger">Delete</button>
         </td>`;
       tbody.appendChild(tr);
     }
@@ -222,11 +324,7 @@
     return cache.filter(r => (r.title||'').toLowerCase().includes(q) || (r.category||'').toLowerCase().includes(q));
   }
 
-  async function refresh() {
-    cache = await getAllRecords();
-    renderTable(applySearchFilter());
-    return cache;
-  }
+  async function refresh() { cache = await getAllRecords(); renderTable(applySearchFilter()); return cache; }
 
   // Init
   (async () => { db = await openDB(); await refresh(); })();
@@ -239,9 +337,7 @@
     const detailsRaw = document.getElementById("details").value.trim();
     if (!title) { alert("Title is required"); return; }
     const record = { title, category, details: detailsRaw ? tryParseJSON(detailsRaw) : "", createdAt: new Date().toISOString() };
-    await addRecord(record);
-    e.target.reset();
-    await refresh();
+    await addRecord(record); e.target.reset(); await refresh();
   });
   document.getElementById("reset-btn").addEventListener("click", () => document.getElementById("data-form").reset());
   document.getElementById("refresh-btn").addEventListener("click", refresh);
@@ -251,74 +347,41 @@
   document.querySelector("#records-table").addEventListener("click", async (e) => {
     const del = e.target.getAttribute("data-del");
     const edit = e.target.getAttribute("data-edit");
-    if (del) {
-      if (!confirm("Delete this record?")) return;
-      await deleteRecord(Number(del));
-      await refresh();
-    }
+    if (del) { if (!confirm("Delete this record?")) return; await deleteRecord(Number(del)); await refresh(); }
     if (edit) {
-      const id = Number(edit);
-      const row = cache.find(r => r.id === id);
-      if (!row) return;
-      const newTitle = prompt("Edit title", row.title ?? "");
-      if (newTitle === null) return; // canceled
-      const newCategory = prompt("Edit category", row.category ?? "");
-      if (newCategory === null) return;
-      const newDetails = prompt("Edit details (JSON or text)", typeof row.details === 'object' ? JSON.stringify(row.details, null, 2) : (row.details ?? ""));
-      if (newDetails === null) return;
-      await updateRecord(id, { title: newTitle.trim(), category: newCategory.trim(), details: newDetails.trim() ? tryParseJSON(newDetails) : "" });
-      await refresh();
+      const id = Number(edit); const row = cache.find(r => r.id === id); if (!row) return;
+      const newTitle = prompt("Edit title", row.title ?? ""); if (newTitle === null) return;
+      const newCategory = prompt("Edit category", row.category ?? ""); if (newCategory === null) return;
+      const newDetails = prompt("Edit details (JSON or text)", typeof row.details === 'object' ? JSON.stringify(row.details, null, 2) : (row.details ?? "")); if (newDetails === null) return;
+      await updateRecord(id, { title: newTitle.trim(), category: newCategory.trim(), details: newDetails.trim() ? tryParseJSON(newDetails) : "" }); await refresh();
     }
   });
 
   // Export
   document.getElementById("download-json-btn").addEventListener("click", async () => {
-    const rows = await refresh();
-    download("data.json", JSON.stringify(rows, null, 2), "application/json");
+    const rows = await refresh(); download("data.json", JSON.stringify(rows, null, 2), "application/json");
   });
   document.getElementById("download-csv-btn").addEventListener("click", async () => {
-    const rows = await refresh();
-    download("data.csv", toCSV(rows), "text/csv");
+    const rows = await refresh(); download("data.csv", toCSV(rows), "text/csv");
   });
 
-  // Import JSON (expects an array of objects with fields similar to what we export)
+  // Import
   document.getElementById("import-json-btn").addEventListener("click", async () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/json,.json';
+    const input = document.createElement('input'); input.type = 'file'; input.accept = 'application/json,.json';
     input.onchange = async () => {
-      const file = input.files[0];
-      if (!file) return;
-      const text = await file.text();
-      try {
-        const arr = JSON.parse(text);
-        if (!Array.isArray(arr)) throw new Error('JSON must be an array of records');
-        for (const r of arr) {
-          const rec = {
-            title: r.title ?? '',
-            category: r.category ?? '',
-            details: (typeof r.details === 'object' || typeof r.details === 'string') ? r.details : '',
-            createdAt: r.createdAt ?? new Date().toISOString()
-          };
-          await addRecord(rec);
-        }
-        await refresh();
-        alert('Import complete');
-      } catch (err) {
-        alert('Import failed: ' + err.message);
-      }
-    };
-    input.click();
+      const file = input.files[0]; if (!file) return; const text = await file.text();
+      try { const arr = JSON.parse(text); if (!Array.isArray(arr)) throw new Error('JSON must be an array of records');
+        for (const r of arr) { const rec = { title: r.title ?? '', category: r.category ?? '', details: (typeof r.details === 'object' || typeof r.details === 'string') ? r.details : '', createdAt: r.createdAt ?? new Date().toISOString() }; await addRecord(rec); }
+        await refresh(); alert('Import complete');
+      } catch (err) { alert('Import failed: ' + err.message); }
+    }; input.click();
   });
 
   // Danger zone
   document.getElementById("clear-btn").addEventListener("click", async () => {
-    if (!confirm("This will delete ALL data. Continue?")) return;
-    await clearAll();
-    await refresh();
+    if (!confirm("This will delete ALL data. Continue?")) return; await clearAll(); await refresh();
   });
 })();
 </script>
 </body>
 </html>
-
